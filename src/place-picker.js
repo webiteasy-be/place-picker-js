@@ -215,6 +215,11 @@
 
             self.submitEdit.addEventListener('click', function(e){
                 self.commit();
+
+                var evt = new Event("change", {"bubbles":true, "cancelable":false});
+
+                self.element.dispatchEvent(evt);
+
                 self.hide();
             });
 
