@@ -93,15 +93,15 @@
         if (pp[attr])
             return;
 
-        if ( typeof pp.options[attr] == 'String'){
+        if ( typeof pp.options[attr] == 'string'){
             pp[attr] = document.getElementById(pp.options[attr]);
-        } else if (typeof pp.options[attr] == 'Function'){
+        } else if (typeof pp.options[attr] == 'function'){
             pp[attr] = pp.options[attr].call(pp);
         } else {
             pp[attr] = pp.options[attr];
         }
 
-        if (!pp[attr])
+        if (!pp[attr] || pp[attr] == null)
             _buildInput(pp, type);
     }
 
