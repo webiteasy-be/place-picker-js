@@ -1,0 +1,25 @@
+<html>
+<head>
+    <!-- TODO remove jQuery, it's only used for $.extend() -->
+    <script
+            src="https://code.jquery.com/jquery-3.2.1.js"
+            integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+            crossorigin="anonymous"></script>
+    <script src="../src/place-picker.js"></script>
+    <script>
+        function initMaps(){
+            PlacePicker.googleLoaded();
+        }
+    </script>
+    <!-- README : you must set your own API_KEY -->
+    <script async defer
+            src="https://maps.googleapis.com/maps/api/js?key=API_KEY&libraries=places&callback=initMaps">
+    </script>
+</head>
+<body>
+<input id="place-picker" placeholder="Choose a place" type="text" />
+<script>
+    new PlacePicker(document.getElementById('place-picker'));
+</script>
+</body>
+</html>
