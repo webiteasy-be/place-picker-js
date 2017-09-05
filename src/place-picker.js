@@ -133,10 +133,11 @@
         }
         el.placePicker = this;
 
-        var data_options={}, val;
+        var data_options={}, val, dataKey;
 
         for(var key in default_options) {
-            val = el.dataset[NS+key];
+            dataKey = NS + key.charAt(0).toUpperCase() + key.slice(1);
+            val = el.dataset[dataKey];
 
             if (val !== undefined)
                 data_options[key] = val;
