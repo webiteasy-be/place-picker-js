@@ -68,10 +68,7 @@
         submitClassSelector: 'place-picker-submit', /* class name in template to get radius input */
         radiusEditClassSelector: 'place-picker-radius', /* class name in template to get radius input */
         format: '%r km around (%.2l, %,4L)',
-        radius: 0,
         radiusUnits: 'km', /* m | km | mi | ft */
-        latitude: 0,
-        longitude: 0,
         commitOnClose: false, // TODO
         positionUnits: 'deg', /* deg | rad */
         saveToInputs: true, // TODO if false, do not try to generated inputs, etc.
@@ -121,10 +118,25 @@
         }
     }
 
+    /**
+     * @param functionToCheck
+     * @returns {boolean}
+     */
     function isFunction(functionToCheck) {
         var getType = {};
         return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
     }
+
+    /**
+     * @param value
+     * @param trim
+     * @returns {boolean}
+     */
+    function isEmpty(value, trim) {
+        // TODO trim without jQuery
+        return value === undefined || value === null || value.length === 0 || (trim && $.trim(value) === '');
+    }
+
 
     /**
      * Google Maps SDK returns weird position object. The goal of this method is to be sure
@@ -160,6 +172,8 @@
         return out;
     }
 
+    var privateLock = new Object();
+
     PlacePickerClass = function(el, options){
         var self = this;
 
@@ -169,6 +183,17 @@
             el.placePicker.destroy();
         }
         el.placePicker = this;
+
+        // Setup private values
+        (function(values){
+            self._values = function(lock){
+                if (lock !== privateLock){
+                    throw "forbidden";
+                }
+
+                return values;
+            };
+        })({});
 
         //
         options = options || {};
@@ -342,19 +367,24 @@
                 case 'ft': radius = radius / 3.28084; break;
             }
 
-            this.options.radius = radius;
+            this._values(privateLock).radius = radius;
 
             if (this.circle){
-                this.circle.setRadius(this.options.radius);
+                this.circle.setRadius(radius);
             }
         },
 
         getRadius: function(units) {
+            var radius = this._values(privateLock).radius;
+
+            if (isEmpty(radius))
+                return null;
+
             switch (units || this.options.radiusUnits){
-                case 'km': return this.options.radius/1000;
-                case 'mi': return this.options.radius/1609.34;
-                case 'ft': return this.options.radius * 3.28084;
-                default : return this.options.radius
+                case 'km': return radius/1000;
+                case 'mi': return radius/1609.34;
+                case 'ft': return radius * 3.28084;
+                default : return radius
             }
         },
 
@@ -394,8 +424,8 @@
                 position.lng = position.lng / Math.PI * 180;
             }
 
-            self.options.latitude = position.lat;
-            self.options.longitude = position.lng;
+            this._values(privateLock).latitude = position.lat;
+            this._values(privateLock).longitude = position.lng;
 
             if (self.marker)
                 self.marker.setPosition(position);
@@ -407,13 +437,23 @@
         getLatitude: function(units) {
             var self = this;
 
-            return (units || self.options.positionUnits) == 'rad' ? self.options.latitude * Math.PI / 180 : self.options.latitude;
+            var latitude = this._values(privateLock).latitude;
+
+            if (isEmpty(latitude))
+                return null;
+
+            return (units || self.options.positionUnits) == 'rad' ? latitude * Math.PI / 180 : latitude;
         },
 
         getLongitude: function(units) {
             var self = this;
 
-            return (units || self.options.positionUnits) == 'rad' ? self.options.longitude * Math.PI / 180 : self.options.longitude
+            var longitude = this._values(privateLock).longitude;
+
+            if (isEmpty(longitude))
+                return null;
+
+            return (units || self.options.positionUnits) == 'rad' ? longitude * Math.PI / 180 : longitude;
         },
 
         getPosition: function(units) {
@@ -433,19 +473,40 @@
             self.longitudeInput.value = self.getLongitude();
             self.radiusInput.value = self.getRadius();
 
-            var value = _replaceNumber(self.options.format, 'l', self.getLatitude());
-            value = _replaceNumber(value, 'L', self.getLongitude());
-            value = _replaceNumber(value, 'r', self.getRadius());
+            if (isFunction(this.options.format)){
+                self.element.value = this.options.format.call(this);
+            } else {
+                var value = self.options.format;
+                var hasValue = false;
+                if (!isEmpty(self.getLatitude())) {
+                    hasValue = true;
+                    value = _replaceNumber(value, 'l', self.getLatitude());
+                }
 
-            self.element.value = value;
+                if (!isEmpty(self.getLongitude())){
+                    hasValue = true;
+                    value = _replaceNumber(value, 'L', self.getLongitude());
+                }
+
+                if (!isEmpty(self.getRadius())){
+                    hasValue = true;
+                    value = _replaceNumber(value, 'r', self.getRadius());
+                }
+
+                if (hasValue){
+                    self.element.value = value;
+                } else {
+                    self.element.value = null;
+                }
+            }
         },
 
         _initMap: function(){
             var self = this;
 
             var center = {
-                lat: self.options.latitude,
-                lng: self.options.longitude
+                lat: self._values(privateLock).latitude || 50, // TODO init value ?
+                lng: self._values(privateLock).longitude || 4
             };
 
             if (self.map){
@@ -477,7 +538,7 @@
                     fillOpacity: 0.35,
                     map: self.map,
                     center: center,
-                    radius: self.options.radius
+                    radius: self._values(privateLock).radius || 0
                 });
             }
 
