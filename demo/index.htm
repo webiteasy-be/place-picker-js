@@ -8,6 +8,7 @@
 
     <!-- load PlacePicker.js-->
     <script src="../src/place-picker.js"></script>
+    <script src="../templates/vanilla.js"></script>
 
     <!-- notify PlacePicker when Google SDK is loaded.-->
     <script>
@@ -31,7 +32,9 @@
     <input name="google_api_key" placeholder="Your google API key">
     <input type="submit">
 </form>
-<input id="place-picker" placeholder="Choose a place" type="text" />
+<p style="text-align: center;">
+    <input id="place-picker" placeholder="Choose an area" style="font-size: 18pt; width:100%; border: solid 1px #CCC; padding: 5px 15px;" type="text" />
+</p>
 <script>
     var api_key_query = window.location.search.split("&")
         .map(function(el){return '?' == el[0] ? el.substr(1) : el})

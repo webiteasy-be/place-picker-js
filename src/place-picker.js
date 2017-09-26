@@ -61,13 +61,14 @@
     var PlacePickerClass;
 
     var default_options = {
+        template: template,
         framework: 'vanilla',
         backdropClassSelector: 'backdrop', /* class name in template to get backdrop */
         mapClassSelector: 'place-picker-map', /* class name in template to get radius input */
         searchClassSelector: 'place-picker-search', /* class name in template to get radius input */
         submitClassSelector: 'place-picker-submit', /* class name in template to get radius input */
         radiusEditClassSelector: 'place-picker-radius', /* class name in template to get radius input */
-        format: '%r km around (%.2l, %,4L)',
+        format: '%r km around (%.2l, %.2L)',
         radiusUnits: 'km', /* m | km | mi | ft */
         commitOnClose: false, // TODO
         positionUnits: 'deg', /* deg | rad */
@@ -217,7 +218,7 @@
         }
 
         // build options
-        self.options = $.extend({}, default_options, data_options, options);
+        self.options = $.extend({}, default_options, PlacePickerClass.options, data_options, options);
 
         // Build elements
         self.build();
@@ -279,7 +280,7 @@
                 return;
 
             self.picker = document.createElement('div');
-            self.picker.innerHTML = template;
+            self.picker.innerHTML = self.options['template'];
             self.picker.style.display = 'none'; // TODO framework
 
             self.element.parentNode.insertBefore(self.picker, self.element);
@@ -566,6 +567,8 @@
             }
         }
     };
+
+    PlacePickerClass.options = {};
 
     return PlacePickerClass;
 }));
