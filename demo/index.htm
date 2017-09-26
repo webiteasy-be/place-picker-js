@@ -1,0 +1,56 @@
+<html>
+<head>
+    <!-- TODO remove jQuery, it's only used for $.extend() -->
+    <script
+            src="https://code.jquery.com/jquery-3.2.1.js"
+            integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+            crossorigin="anonymous"></script>
+
+    <!-- load PlacePicker.js-->
+    <script src="../src/place-picker.js"></script>
+
+    <!-- notify PlacePicker when Google SDK is loaded.-->
+    <script>
+        /**
+         * Google SDK callback : notify PlacePicker when available
+         */
+        function initMaps(){
+            PlacePicker.googleLoaded();
+        }
+    </script>
+
+    <!-- load Google SDK -->
+    <!--
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=API_KEY&libraries=places&callback=initMaps">
+        // SDK dynamically loaded in this demo
+    </script>
+    -->
+</head>
+<body>
+<form id="google-api-key-form" method="get">
+    <input name="google_api_key" placeholder="Your google API key">
+    <input type="submit">
+</form>
+<input id="place-picker" placeholder="Choose a place" type="text" />
+<script>
+    var api_key_query = window.location.search.split("&")
+        .map(function(el){return '?' == el[0] ? el.substr(1) : el})
+        .filter(function(el){ return el.startsWith('google_api_key=') });
+
+    if (api_key_query.length){
+        document.getElementById('google-api-key-form').style.display = 'none';
+
+        // Dynamically load the Google SDK
+        var script = document.createElement('script');
+        script.defer = true;
+        script.async = true;
+        script.src = "https://maps.googleapis.com/maps/api/js?key="+api_key_query[0].substr(15)+"&libraries=places&callback=initMaps";
+        document.getElementsByTagName('body')[0].append(script);
+
+        new PlacePicker(document.getElementById('place-picker'));
+    } else {
+        document.getElementById('place-picker').style.display = 'none'
+    }
+</script>
+</body>
+</html>
