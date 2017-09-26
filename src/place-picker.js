@@ -68,12 +68,10 @@
         submitClassSelector: 'place-picker-submit', /* class name in template to get radius input */
         radiusEditClassSelector: 'place-picker-radius', /* class name in template to get radius input */
         format: '%r km around (%.2l, %,4L)',
-        radius: 0,
         radiusUnits: 'km', /* m | km | mi | ft */
-        latitude: 0,
-        longitude: 0,
         commitOnClose: false, // TODO
         positionUnits: 'deg', /* deg | rad */
+        saveToInputs: true, // TODO if false, do not try to generated inputs, etc.
         latitudeInput: null, /* string (id), function or Element */
         longitudeInput: null, /* string (id), function or Element */
         radiusInput: null /* string (id), function or Element */
@@ -93,16 +91,65 @@
         if (pp[attr])
             return;
 
-        if ( typeof pp.options[attr] == 'String'){
+        if ( typeof pp.options[attr] == 'string'){
             pp[attr] = document.getElementById(pp.options[attr]);
-        } else if (typeof pp.options[attr] == 'Function'){
+        } else if (typeof pp.options[attr] == 'function'){
             pp[attr] = pp.options[attr].call(pp);
         } else {
             pp[attr] = pp.options[attr];
         }
 
-        if (!pp[attr])
+        if (!pp[attr] || pp[attr] == null)
             _buildInput(pp, type);
+    }
+
+    function _capitalize(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+
+    function _parseStringOption(value, option){
+        switch (option){
+            case 'latitude':
+            case 'longitude':
+            case 'radius':
+                return parseFloat(value);
+            default :
+                return value;
+        }
+    }
+
+    /**
+     * @param functionToCheck
+     * @returns {boolean}
+     */
+    function isFunction(functionToCheck) {
+        var getType = {};
+        return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
+    }
+
+    /**
+     * @param value
+     * @param trim
+     * @returns {boolean}
+     */
+    function isEmpty(value, trim) {
+        // TODO trim without jQuery
+        return value === undefined || value === null || value.length === 0 || (trim && $.trim(value) === '');
+    }
+
+
+    /**
+     * Google Maps SDK returns weird position object. The goal of this method is to be sure
+     * that you get a normalized position
+     * @param position
+     * @returns {{lat: number, lng: number}}
+     * @private
+     */
+    function _normalizePosition(position){
+        return {
+            lat: isFunction(position.lat) ? position.lat() : position.lat,
+            lng: isFunction(position.lng) ? position.lng() : position.lng
+        }
     }
 
     function _replaceNumber(template, tag, number) {
@@ -125,28 +172,73 @@
         return out;
     }
 
+    var privateLock = new Object();
+
     PlacePickerClass = function(el, options){
         var self = this;
+
+        self.element = el;
 
         if (el.placePicker){
             el.placePicker.destroy();
         }
         el.placePicker = this;
 
-        var data_options={}, val;
+        // Setup private values
+        (function(values){
+            self._values = function(lock){
+                if (lock !== privateLock){
+                    throw "forbidden";
+                }
+
+                return values;
+            };
+        })({});
+
+        //
+        options = options || {};
+        var options_values = {}; // TODO remove values from options
+
+        // Load options from dataset
+        var data_options={}, dataVal, dataKey;
+        var data_values={};
 
         for(var key in default_options) {
-            val = el.dataset[NS+key];
+            dataKey = NS + key.charAt(0).toUpperCase() + key.slice(1);
+            dataVal = el.dataset[dataKey];
 
-            if (val !== undefined)
-                data_options[key] = val;
+            if (dataVal !== undefined){
+                if (key == 'latitude' || key == 'longitude' || key == 'radius'){
+                    data_values[key] = _parseStringOption(dataVal, key);
+                } else {
+                    data_options[key] = _parseStringOption(dataVal, key);
+                }
+            }
         }
 
-        self.options = $.extend({}, default_options, data_options, options || {});
+        // build options
+        self.options = $.extend({}, default_options, data_options, options);
 
-        self.element = el;
-
+        // Build elements
         self.build();
+
+        // take values from input in build
+        var input_values={}, valueKey, valuesKeys = ['radius', 'latitude', 'longitude'];
+        for (var i in valuesKeys){
+            valueKey = valuesKeys[i];
+
+            if (self[valueKey+'Input'] && self[valueKey+'Input'].value){
+                input_values[valueKey] = _parseStringOption(self[valueKey+'Input'].value, valueKey)
+            }
+        }
+
+        // setup values collected from input, data set and options
+        var values = $.extend({}, input_values, data_values, options_values);
+        for (var valueKey in values){
+            self["set" + _capitalize(valueKey)](values[valueKey]);
+        }
+
+        self.commit();
     };
 
     /**
@@ -202,6 +294,7 @@
             _ensureInput(self, 'latitude');
             _ensureInput(self, 'longitude');
             _ensureInput(self, 'radius');
+            // TODO sync options and inputs values
 
             self.element.addEventListener('focus', function(e){
                 self.show();
@@ -214,6 +307,11 @@
 
             self.submitEdit.addEventListener('click', function(e){
                 self.commit();
+
+                var evt = new Event("change", {"bubbles":true, "cancelable":false});
+
+                self.element.dispatchEvent(evt);
+
                 self.hide();
             });
 
@@ -259,33 +357,75 @@
         setRadius: function(radius, units) {
             var self = this;
 
+            if (this.radiusEdit){
+                this.radiusEdit.value = radius;
+            }
+
             switch (units || self.options.radiusUnits) {
                 case 'km': radius = radius * 1000; break;
                 case 'mi': radius = radius * 1609.34; break;
                 case 'ft': radius = radius / 3.28084; break;
             }
-            this.options.radius = radius;
+
+            this._values(privateLock).radius = radius;
 
             if (this.circle){
-                this.circle.setRadius(this.options.radius);
+                this.circle.setRadius(radius);
             }
         },
 
-        getRadius: function() {
-            switch (this.options.radiusUnits){
-                case 'km': return this.options.radius/1000;
-                case 'mi': return this.options.radius/1609.34;
-                case 'ft': return this.options.radius * 3.28084;
-                default : return this.options.radius
+        getRadius: function(units) {
+            var radius = this._values(privateLock).radius;
+
+            if (isEmpty(radius))
+                return null;
+
+            switch (units || this.options.radiusUnits){
+                case 'km': return radius/1000;
+                case 'mi': return radius/1609.34;
+                case 'ft': return radius * 3.28084;
+                default : return radius
             }
+        },
+
+        /**
+         * @param position {number}
+         * @param units null | 'deg' | 'rad'
+         */
+        setLatitude: function(position, units){
+            var self = this;
+
+            self.setPosition({
+                lat: position,
+                lng: self.getLongitude(units)
+            }, units);
+        },
+
+        /**
+         * @param position {number}
+         * @param units null | 'deg' | 'rad'
+         */
+        setLongitude: function(position, units){
+            var self = this;
+
+            self.setPosition({
+                lat: self.getLatitude(units),
+                lng: position
+            }, units);
         },
 
         setPosition: function(position, units){
-            // TODO units and use function if function
             var self = this;
 
-            self.options.latitude = position.lat();
-            self.options.longitude = position.lng();
+            position = _normalizePosition(position);
+
+            if ((units || self.options.positionUnits) == 'rad') {
+                position.lat = position.lat / Math.PI * 180;
+                position.lng = position.lng / Math.PI * 180;
+            }
+
+            this._values(privateLock).latitude = position.lat;
+            this._values(privateLock).longitude = position.lng;
 
             if (self.marker)
                 self.marker.setPosition(position);
@@ -294,25 +434,38 @@
                 self.circle.setCenter(position);
         },
 
-        getLatitude: function() {
+        getLatitude: function(units) {
             var self = this;
 
-            return self.options.positionUnits == 'rad' ? self.options.latitude * Math.PI / 180 : self.options.latitude;
+            var latitude = this._values(privateLock).latitude;
+
+            if (isEmpty(latitude))
+                return null;
+
+            return (units || self.options.positionUnits) == 'rad' ? latitude * Math.PI / 180 : latitude;
         },
 
-        getLongitude: function() {
+        getLongitude: function(units) {
             var self = this;
 
-            return self.options.positionUnits == 'rad' ? self.options.longitude * Math.PI / 180 : self.options.longitude
+            var longitude = this._values(privateLock).longitude;
+
+            if (isEmpty(longitude))
+                return null;
+
+            return (units || self.options.positionUnits) == 'rad' ? longitude * Math.PI / 180 : longitude;
         },
 
-        getPosition: function() {
+        getPosition: function(units) {
             return {
-                latitude: this.getLatitude(),
-                longitude: this.getLongitude()
+                latitude: this.getLatitude(units),
+                longitude: this.getLongitude(units)
             }
         },
 
+        /**
+         * synchronize the root element and separated input values with the values selected in the picker
+         */
         commit: function() {
             var self = this;
 
@@ -320,19 +473,40 @@
             self.longitudeInput.value = self.getLongitude();
             self.radiusInput.value = self.getRadius();
 
-            var value = _replaceNumber(self.options.format, 'l', self.getLatitude());
-            value = _replaceNumber(value, 'L', self.getLongitude());
-            value = _replaceNumber(value, 'r', self.getRadius());
+            if (isFunction(this.options.format)){
+                self.element.value = this.options.format.call(this);
+            } else {
+                var value = self.options.format;
+                var hasValue = false;
+                if (!isEmpty(self.getLatitude())) {
+                    hasValue = true;
+                    value = _replaceNumber(value, 'l', self.getLatitude());
+                }
 
-            self.element.value = value;
+                if (!isEmpty(self.getLongitude())){
+                    hasValue = true;
+                    value = _replaceNumber(value, 'L', self.getLongitude());
+                }
+
+                if (!isEmpty(self.getRadius())){
+                    hasValue = true;
+                    value = _replaceNumber(value, 'r', self.getRadius());
+                }
+
+                if (hasValue){
+                    self.element.value = value;
+                } else {
+                    self.element.value = null;
+                }
+            }
         },
 
         _initMap: function(){
             var self = this;
 
             var center = {
-                lat: self.options.latitude,
-                lng: self.options.longitude
+                lat: self._values(privateLock).latitude || 50, // TODO init value ?
+                lng: self._values(privateLock).longitude || 4
             };
 
             if (self.map){
@@ -364,7 +538,7 @@
                     fillOpacity: 0.35,
                     map: self.map,
                     center: center,
-                    radius: self.options.radius
+                    radius: self._values(privateLock).radius || 0
                 });
             }
 
